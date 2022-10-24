@@ -1,187 +1,59 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<script>
-    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
-    constructor(name, destination) {
-        this.name = name;
-        this.destination = destination;
-        this.serverListeners = {};
-        this.bgRequestsListeners = {};
-        this.bgEventsListeners = {};
-        window.addEventListener('message', (message) => {
-            const data = message.data;
-            const isNotForMe = !(data.destination && data.destination === this.name);
-            const hasNotEventProp = !data.event;
-            if (isNotForMe || hasNotEventProp) {
-                return;
-            }
-            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
-                const response = data.args;
-                if (this.hasBgRequestListener(response.requestId)) {
-                    try {
-                        this.bgRequestsListeners[response.requestId](response.response);
-                    }
-                    catch (e) {
-                        console.log(e);
-                    }
-                    delete this.bgRequestsListeners[response.requestId];
-                }
-            }
-            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
-                const response = data.args;
-                if (this.hasBgEventListener(response.event)) {
-                    try {
-                        this.bgEventsListeners[data.id](response.payload);
-                    }
-                    catch (e) {
-                        console.log(e);
-                    }
-                }
-            }
-            else if (this.hasServerListener(data.event)) {
-                try {
-                    this.serverListeners[data.event](data.args);
-                }
-                catch (e) {
-                    console.log(e);
-                }
-            }
-            else {
-                console.log(`event not handled: ${data.event}`);
-            }
-        });
-    }
-    emitToServer(event, args) {
-        const id = this.generateUIID();
-        const message = {
-            args,
-            destination: this.destination,
-            event,
-            id,
-        };
-        window.postMessage(message, location.origin);
-        return id;
-    }
-    emitToBg(bgEventName, args) {
-        const requestId = this.generateUIID();
-        const request = { bgEventName, requestId, args };
-        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
-        return requestId;
-    }
-    hasServerListener(event) {
-        return !!this.serverListeners[event];
-    }
-    hasBgRequestListener(requestId) {
-        return !!this.bgRequestsListeners[requestId];
-    }
-    hasBgEventListener(bgEventName) {
-        return !!this.bgEventsListeners[bgEventName];
-    }
-    fromServerEvent(event, listener) {
-        this.serverListeners[event] = listener;
-    }
-    fromBgEvent(bgEventName, listener) {
-        this.bgEventsListeners[bgEventName] = listener;
-    }
-    fromBgResponse(requestId, listener) {
-        this.bgRequestsListeners[requestId] = listener;
-    }
-    generateUIID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
-})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')
-</script>
-<script>
-    const hideMyLocation = new (class HideMyLocation {
-    constructor(clientKey) {
-        this.clientKey = clientKey;
-        this.watchIDs = {};
-        this.client = window[Symbol.for(clientKey)];
-        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
-        const watchPosition = navigator.geolocation.watchPosition;
-        const clearWatch = navigator.geolocation.clearWatch;
-        const self = this;
-        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
-            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
-        };
-        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
-            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
-        };
-        navigator.geolocation.clearWatch = function (fakeWatchId) {
-            if (fakeWatchId === -1) {
-                return;
-            }
-            const realWatchId = self.watchIDs[fakeWatchId];
-            delete self.watchIDs[fakeWatchId];
-            return clearWatch.apply(this, [realWatchId]);
-        };
-    }
-    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
-        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
-        let fakeWatchId = this.getRandomInt(0, 100000);
-        this.client.fromBgResponse(requestId, (response) => {
-            if (response.enabled) {
-                if (response.status === 'SUCCESS') {
-                    const position = this.map(response);
-                    successCallback(position);
-                }
-                else {
-                    const error = this.errorObj();
-                    errorCallback(error);
-                    fakeWatchId = -1;
-                }
-            }
-            else {
-                const args = [successCallback, errorCallback, options];
-                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
-                if (type === 'WATCH') {
-                    this.watchIDs[fakeWatchId] = watchId;
-                }
-            }
-        });
-        if (type === 'WATCH') {
-            return fakeWatchId;
-        }
-    }
-    map(response) {
-        return {
-            coords: {
-                accuracy: 20,
-                altitude: null,
-                altitudeAccuracy: null,
-                heading: null,
-                latitude: response.latitude,
-                longitude: response.longitude,
-                speed: null,
-            },
-            timestamp: Date.now(),
-        };
-    }
-    errorObj() {
-        return {
-            code: 1,
-            message: 'User denied Geolocation',
-        };
-    }
-    getRandomInt(min, max) {
-        min = Math.ceil(min);
-        max = Math.floor(max);
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
-})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
-</script>
+
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <script></script>
+  <meta name="google-site-verification" content="ftFOlJETX-2KNjaPh8W6s8lhigItRuu9fOmjHZZ0nY0" />
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+    integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+
+  <title>Pre-Avatar</title>
 </head>
+    
+<style type="text/css">
+  table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  audio {
+    width: 100%;
+  }
+
+  thead>tr>th:first-child {
+    width: 96px;
+  }
+.bg-secondary {
+    background-color: #11568b!important;
+}
+  @media (max-width: 767px) {
+    .big-screen {
+      display: none;
+    }
+    .container {
+    max-width: 90% !important;
+}
+  }
+
+  @media (min-width: 767px) {
+    .small-screen {
+      display: none;
+    }
+    .container {
+    max-width: 90% !important;
+}
+  }
+</style>
+
+
+
+
 <body>
-    <header class="header">
+  <header class="header">
     <div class="jumbotron bg-secondary text-center">
       <div class="container">
         <div class="row align-items-center">
@@ -200,58 +72,28 @@
         </div>
       </div>
     </div>
-    </header>
-    <main>
-        <div class="container">
-            <div class="row" id="result">
-                <div class="col-md-12">
-                    <h5>Abstract:</h5> 
-                    Since the beginning of the COVID-19 pandemic, remote conferencing and school-teaching have become important tools. The previous applications aim to save the commuting cost with real-time interactions. However, our application is going to lower the production and reproduction costs when preparing the communication materials. This paper proposes a system called Pre-Avatar, generating a presentation video with a talking face of a target speaker with 1 front-face photo and a 3-minute voice recording. Technically, the system consists of three main modules, user experience interface (UEI), talking face module and few-shot text-to-speech (TTS) module. The system firstly clones the target speaker's voice, and then generates the speech, and finally generate an avatar with appropriate lip and head movements. Under any scenario, users only need to replace slides with different notes to generate another new video.
-                    <br>
-                    <h5 style="display: inline-block;font-size: 12px;">Keywords:</h5> <span style='font-size: 12px;'>Avatar, Multimodal systems, Talking face, Few-shot TTS, Transfer learning</span>
+  </header>
+  <main>
+    <div class="container">
+      <div class="row" id="result">
+        <div class="col-md-12">
+        	<h5>Abstract:</h5> 
+          Since the beginning of the COVID-19 pandemic, remote conferencing and school-teaching have become important tools. The previous applications aim to save the commuting cost with real-time interactions. However, our application is going to lower the production and reproduction costs when preparing the communication materials. This paper proposes a system called Pre-Avatar, generating a presentation video with a talking face of a target speaker with 1 front-face photo and a 3-minute voice recording. Technically, the system consists of three main modules, user experience interface (UEI), talking face module and few-shot text-to-speech (TTS) module. The system firstly clones the target speaker's voice, and then generates the speech, and finally generate an avatar with appropriate lip and head movements. Under any scenario, users only need to replace slides with different notes to generate another new video.
+          <br>
+          <h5 style="display: inline-block;font-size: 12px;">Keywords:</h5> <span style='font-size: 12px;'>Avatar, Multimodal systems, Talking face, Few-shot TTS, Transfer learning</span>
 
-                    <p align="center">
-                        <video width="640" height="480" controls>
-                            <source src="movie.mp4" type="video/mp4">
-                            您的浏览器不支持video标签
-                        </video>
-                    </p>
-                <div class="row" style="font-size: 12px;">
+<p align="center">
+<video width="640" height="480" controls>
+    <source src="movie.mp4" type="video/mp4">
+    您的浏览器不支持video标签
+</video>
+</p>
+          
+              <div class="row" style="font-size: 12px;">
                  + Equal contribution
                </div>
                <div  class="row" style="font-size: 12px;">
                  * Corresponding author: Jianzong Wang, jzwang@188.com
                </div>
-            </div>
-        </div>
-    </main>
 </body>
-<grammarly-desktop-integration data-grammarly-shadow-root="true">
-    #shadow-root (open)
-    <style>
-    div.grammarly-desktop-integration {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-        -moz-user-select: none;
-        -webkit-user-select: none;
-        -ms-user-select:none;
-        user-select:none;
-    }
-
-    div.grammarly-desktop-integration:before {
-        content: attr(data-content);
-    }
-    </style>
-    <div aria-label="grammarly-integration" role="group" tabindex="-1" class="grammarly-desktop-integration" 
-    data-content="{"mode":"full","isActive":"true","isUserDisabled":"false"}">
-        ::before
-    </div>
-</grammarly-desktop-integration>
 </html>
